@@ -6,9 +6,19 @@ use error_mapper::{create_new_error, SystemErrorCodes, TheResult};
 use rust_decimal::{Decimal, RoundingStrategy};
 
 #[derive(Debug, Clone, Copy)]
+/// Maximum parsing allowed as coefficient mantissa: i64, meaning, on creation, up to i64::MAX and i64::MIN
+/// is allowed.
+/// ## Examples:
+/// - Valid positive number
+/// 9.223372036854775807x10^5 -> The mantissa is equivalent to i64::MAX, hence, it can be parsed
+/// - Valid negative number 
+/// -9.223372036854775807x10^5 -> The mantissa is equivalent to i64::MIN, it'll be parsed as well
+/// - Invalid number
+/// 9.2233720368547758070x10^5 -> The mantissa contains a value 10 times higher than i64::MAX, 
+/// conversion will fail
 pub struct ScientificNotation {
     coefficient: Decimal,
-    exponent: Decimal,
+    exponent: i16,
     display_decimals: usize
 }
 
@@ -22,7 +32,7 @@ impl ScientificNotation {
         self
     }
 
-    pub fn exponent(mut self, exponent: Decimal) -> Self {
+    pub fn exponent(mut self, exponent: i16) -> Self {
         self.exponent = exponent;
         self
     }
@@ -51,12 +61,8 @@ impl ScientificNotation {
             .map_err(|error| create_new_error!(SystemErrorCodes::ParseError ,error.to_string()))?;
 
         let exponent = full_notation[1]
-            .parse::<Decimal>()
+            .parse::<i16>()
             .map_err(|error| create_new_error!(SystemErrorCodes::ParseError ,error.to_string()))?;
-
-        if !exponent.is_integer() {
-            return Err(create_new_error!("Exponent cannot contain decimal places!"))
-        }
 
         let display_decimals_unparsed = coefficient.fract();
         let display_decimals = if display_decimals_unparsed == Decimal::ZERO {
@@ -81,7 +87,7 @@ impl Default for ScientificNotation {
     fn default() -> Self {
         Self {
             coefficient: Decimal::from(1),
-            exponent: Decimal::from(0),
+            exponent: i16::default(),
             display_decimals: 2
         }
     }

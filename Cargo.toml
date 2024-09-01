@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+chrono = { version = "0.4.38" }
+error_mapper = { version = "0.3.11" }
+rust_decimal = "1.36.0"

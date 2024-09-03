@@ -11,10 +11,10 @@ use rust_decimal::{Decimal, RoundingStrategy};
 /// ## Examples:
 /// - Valid positive number
 /// 9.223372036854775807x10^5 -> The mantissa is equivalent to i64::MAX, hence, it can be parsed
-/// - Valid negative number 
+/// - Valid negative number
 /// -9.223372036854775807x10^5 -> The mantissa is equivalent to i64::MIN, it'll be parsed as well
 /// - Invalid number
-/// 9.2233720368547758070x10^5 -> The mantissa contains a value 10 times higher than i64::MAX, 
+/// 9.2233720368547758070x10^5 -> The mantissa contains a value 10 times higher than i64::MAX,
 /// conversion will fail
 pub struct ScientificNotation {
     coefficient: Decimal,
@@ -81,6 +81,67 @@ impl ScientificNotation {
             display_decimals
         })
     }
+
+    fn sum(&mut self, other: Self) -> TheResult<Self> {
+        //  First, equalize exponents
+        let exponent_diff = self.exponent - other.exponent;
+        self.exponent -= exponent_diff;
+
+        //  Second, adapt coefficient to that exponent equalization
+        for _ in 0..exponent_diff.abs() {
+            //  If exponent difference is negative, then we need to make the number smaller by
+            // multiplicating by 0.1
+            let exponent_value = if exponent_diff.is_positive() {
+                Decimal::from(10)
+            } else {
+                Decimal::new(1, 1)
+            };
+            self.coefficient *= Decimal::from(exponent_value);
+        }
+
+        //  Third, with exponents equalized, sum coefficients
+        let mut coefficient_sum_result = self.coefficient + other.coefficient;
+
+        //  Obtaining the mantissa length to convert into a single int, with the needed decimal places
+        let old_mantissa = coefficient_sum_result.mantissa();
+        let old_scale = coefficient_sum_result.scale();
+
+        dbg!(&coefficient_sum_result);
+        dbg!(&old_mantissa);
+        dbg!(&old_scale);
+        
+        //  Rescale the coefficient
+        let scale_shift_amount = if old_scale as usize > old_mantissa.to_string().len() {
+            //  In this case the shift must be negative, exponent decreases
+            // let shift = (old_scale - old_mantissa.to_string().len() as u32) as i16;
+            let shift = -(old_scale as i16);
+            // coefficient_sum_result.set_scale(shift as u32)
+            coefficient_sum_result.set_scale(old_mantissa.to_string().len() as u32 - 1)
+                .map_err(|error| create_new_error!(error))?;
+            shift
+        } else {
+            //  Shift is positive, exponent increases
+            let shift = (old_mantissa.to_string().len() as u32 - old_scale - 1) as i16;
+            coefficient_sum_result.set_scale(old_mantissa.to_string().len() as u32 - 1)
+                .map_err(|error| create_new_error!(error))?;
+            shift
+        };
+        
+        //  Adapt the exponent to the new scale
+        let new_exponent = self.exponent + scale_shift_amount;
+        let new_display_decimals = if self.coefficient.mantissa().to_string().len() > 3 {
+            //  If mantissa is too long, round to a default of 3 decimals
+            3
+        } else {
+            coefficient_sum_result.mantissa().to_string().len() - 1
+        };
+
+        Ok(Self {
+            coefficient: coefficient_sum_result,
+            exponent: new_exponent,
+            display_decimals: new_display_decimals
+        })
+    }
 }
 
 impl Default for ScientificNotation {
@@ -106,6 +167,7 @@ impl Display for ScientificNotation {
     }
 }
 
+/*
 impl std::ops::Add for ScientificNotation {
     type Output = ScientificNotation;
     fn add(self, rhs: Self) -> Self::Output {
@@ -133,3 +195,4 @@ impl std::ops::Div for ScientificNotation {
         todo!()
     }
 }
+*/
